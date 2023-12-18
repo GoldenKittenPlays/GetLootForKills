@@ -19,7 +19,7 @@ namespace GetLootForKills
 
         private static Plugin Instance;
 
-        internal ManualLogSource logger;
+        public static ManualLogSource logger;
 
         private void Awake()
         {

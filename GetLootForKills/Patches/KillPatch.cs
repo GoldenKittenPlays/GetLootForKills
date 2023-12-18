@@ -1,4 +1,5 @@
-﻿using HarmonyLib;
+﻿using GetLootForKills.Component;
+using HarmonyLib;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -18,7 +19,7 @@ namespace GetLootForKills.Patches
         [HarmonyPostfix]
         static void patchKillEnemyOnOwnerClient(ref EnemyAI __instance)
         {
-            if (__instance.isEnemyDead)
+            if (__instance.isEnemyDead && __instance.gameObject.GetComponent<DroppedItemEnemy>() == null)
             {
                 RoundManager instance = RoundManager.Instance;
                 int itemID = UnityEngine.Random.Range(0, instance.currentLevel.spawnableScrap.Count);
@@ -29,7 +30,7 @@ namespace GetLootForKills.Patches
                 GrabbableObject component = obj.GetComponent<GrabbableObject>();
                 component.fallTime = 0f;
                 component.SetScrapValue(itemID);
-                int scrapValue = (int)(UnityEngine.Random.Range(instance.currentLevel.minTotalScrapValue / 10, instance.currentLevel.maxTotalScrapValue / 10) * instance.scrapValueMultiplier);
+                int scrapValue = (int)(UnityEngine.Random.Range(instance.currentLevel.minTotalScrapValue / 3, instance.currentLevel.maxTotalScrapValue / 3) * instance.scrapValueMultiplier);
                 if (scrapValue > 30)
                 {
                     component.SetScrapValue(30);
@@ -38,6 +39,7 @@ namespace GetLootForKills.Patches
                 {
                     component.SetScrapValue(scrapValue);
                 }
+                __instance.gameObject.AddComponent<DroppedItemEnemy>();
                 obj.GetComponent<NetworkObject>().Spawn();
             }
         }
