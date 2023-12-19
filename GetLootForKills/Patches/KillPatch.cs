@@ -30,7 +30,7 @@ namespace GetLootForKills.Patches
                 GrabbableObject component = obj.GetComponent<GrabbableObject>();
                 component.fallTime = 0f;
                 component.SetScrapValue(itemID);
-                int scrapValue = (int)(UnityEngine.Random.Range(instance.currentLevel.minTotalScrapValue / 3, instance.currentLevel.maxTotalScrapValue / 3) * instance.scrapValueMultiplier);
+                int scrapValue = (int)(UnityEngine.Random.Range(30, 300) * instance.scrapValueMultiplier);
                 if (scrapValue > 30)
                 {
                     component.SetScrapValue(30);
