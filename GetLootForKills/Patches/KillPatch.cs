@@ -1,11 +1,7 @@
 ﻿using GetLootForKills.Component;
 using HarmonyLib;
-using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -14,33 +10,94 @@ namespace GetLootForKills.Patches
     [HarmonyPatch(typeof(EnemyAI))]
     internal class KillPatch
     {
-
         [HarmonyPatch("KillEnemyOnOwnerClient")]
-        [HarmonyPostfix]
+        [HarmonyPrefix]
         static void patchKillEnemyOnOwnerClient(ref EnemyAI __instance)
         {
             if (__instance.isEnemyDead && __instance.gameObject.GetComponent<DroppedItemEnemy>() == null)
             {
                 RoundManager instance = RoundManager.Instance;
-                int itemID = UnityEngine.Random.Range(0, instance.currentLevel.spawnableScrap.Count);
-                Item item = instance.currentLevel.spawnableScrap[itemID].spawnableItem;
-                Vector3 position = __instance.transform.position + Vector3.up * 0.6f;
-                position += new Vector3(UnityEngine.Random.Range(-0.8f, 0.8f), 0f, UnityEngine.Random.Range(-0.8f, 0.8f));
-                GameObject obj = UnityEngine.Object.Instantiate(item.spawnPrefab, position, Quaternion.identity, RoundManager.Instance.spawnedScrapContainer);
-                GrabbableObject component = obj.GetComponent<GrabbableObject>();
-                component.fallTime = 0f;
-                component.SetScrapValue(itemID);
-                int scrapValue = (int)(UnityEngine.Random.Range(30, 300) * instance.scrapValueMultiplier);
-                if (scrapValue > 30)
+                List<ItemToDrop> items = GetItemsForMob(Plugin.RemoveWhitespaces(__instance.enemyType.enemyName.ToUpper()));
+                if (items?.Any() != true)
                 {
-                    component.SetScrapValue(30);
+                    int num = UnityEngine.Random.Range(0, instance.currentLevel.spawnableScrap.Count);
+                    items.Add(new ItemToDrop(instance.currentLevel.spawnableScrap[num].spawnableItem, UnityEngine.Random.Range(30, 50)));
                 }
-                else
+                for(int i = 0; i < items.Count; i++)
                 {
-                    component.SetScrapValue(scrapValue);
+                    Vector3 position = __instance.transform.position + Vector3.up * 0.6f;
+                    position += new Vector3(UnityEngine.Random.Range(- 0.8f, 0.8f), 0f, UnityEngine.Random.Range(-0.8f, 0.8f));
+                    GameObject obj = UnityEngine.Object.Instantiate(items[i].scrapItem.spawnPrefab, position, Quaternion.identity, RoundManager.Instance.spawnedScrapContainer);
+                    GrabbableObject component = obj.GetComponent<GrabbableObject>();
+                    component.fallTime = 0f;
+                    int valueOfScrap = items[i].scrapValue;
+                    if (instance.scrapValueMultiplier > 1)
+                    {
+                        valueOfScrap = (int)(valueOfScrap * instance.scrapValueMultiplier);
+                    }
+                    component.SetScrapValue(valueOfScrap);
+                    obj.GetComponent<NetworkObject>().Spawn();
+                    __instance.gameObject.AddComponent<DroppedItemEnemy>();
                 }
-                __instance.gameObject.AddComponent<DroppedItemEnemy>();
-                obj.GetComponent<NetworkObject>().Spawn();
+            }
+        }
+ 
+        static List<ItemToDrop> GetItemsForMob(string mobName)
+        {
+            List<ItemToDrop> itemsToGive = new List<ItemToDrop>();
+            if (Plugin.enemies != null && Plugin.enemies?.Any() == true)
+            {
+                foreach (EnemyType enemy in Plugin.enemies)
+                {
+                    if (Plugin.RemoveWhitespaces(enemy.enemyName.ToUpper()).Equals(mobName))
+                    {
+                        List<string> items = Plugin.GetMobItems(mobName);
+                        for (int i = 0; i < (items.Count / 6); i++)
+                        {
+                            int count = (6 * i);
+                            string name = Plugin.RemoveWhitespaces(items[count]);
+                            int minItemDropAmount = int.Parse(Plugin.RemoveWhitespaces(items[count + 1]));
+                            int maxItemDropAmount = int.Parse(Plugin.RemoveWhitespaces(items[count + 2]));
+                            int minScrapValue = int.Parse(Plugin.RemoveWhitespaces(items[count + 3]));
+                            int maxScrapValue = int.Parse(Plugin.RemoveWhitespaces(items[count + 4]));
+                            int dropChance = int.Parse(Plugin.RemoveWhitespaces(items[count + 5]));
+                            System.Random random = new System.Random();
+                            int rand = UnityEngine.Random.Range(1, 1000);
+                            if (rand < dropChance)
+                            {
+                                foreach (Item itemToGive in Plugin.items)
+                                {
+                                    if (Plugin.RemoveWhitespaces(itemToGive.itemName.ToUpper()).Equals(Plugin.RemoveWhitespaces(name.ToUpper())))
+                                    {
+                                        rand = 1;
+                                        if (minItemDropAmount < maxItemDropAmount && minItemDropAmount > 0)
+                                        {
+                                            rand = UnityEngine.Random.Range(minItemDropAmount, maxItemDropAmount);
+                                        }
+                                        for (int id = 0; id < rand; id++)
+                                        {
+                                            itemsToGive.Add(new ItemToDrop(itemToGive, UnityEngine.Random.Range(minScrapValue, maxScrapValue)));
+                                            Plugin.logger.LogInfo("Item Added!");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return itemsToGive;
+        }
+
+        public class ItemToDrop
+        {
+            public int scrapValue;
+            public Item scrapItem;
+
+            public ItemToDrop(Item item, int value)
+            {
+                scrapValue = value;
+                scrapItem = item;
             }
         }
     }
