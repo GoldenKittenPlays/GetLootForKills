@@ -14,11 +14,12 @@ namespace GetLootForKills.Patches
         [HarmonyPrefix]
         static void patchKillEnemyOnOwnerClient(ref EnemyAI __instance)
         {
-            if (__instance.isEnemyDead && __instance.gameObject.GetComponent<DroppedItemEnemy>() == null)
+            if (__instance.gameObject.GetComponent<DroppedItemEnemy>() == null)
             {
                 RoundManager instance = RoundManager.Instance;
+                Plugin.logger.LogInfo("Killed Mob Name: " + __instance.enemyType.enemyName.ToUpper());
                 List<ItemToDrop> items = GetItemsForMob(Plugin.RemoveWhitespaces(__instance.enemyType.enemyName.ToUpper()));
-                if (items?.Any() != true)
+                if (!items.Any())
                 {
                     int num = UnityEngine.Random.Range(0, instance.currentLevel.spawnableScrap.Count);
                     items.Add(new ItemToDrop(instance.currentLevel.spawnableScrap[num].spawnableItem, UnityEngine.Random.Range(30, 50)));
@@ -45,46 +46,43 @@ namespace GetLootForKills.Patches
         static List<ItemToDrop> GetItemsForMob(string mobName)
         {
             List<ItemToDrop> itemsToGive = new List<ItemToDrop>();
-            if (Plugin.enemies != null && Plugin.enemies?.Any() == true)
+            List<string> items = Plugin.GetMobItems(mobName);
+            if (items.Any() && items != null)
             {
-                foreach (EnemyType enemy in Plugin.enemies)
+                for (int i = 0; i < (items.Count / 6); i++)
                 {
-                    if (Plugin.RemoveWhitespaces(enemy.enemyName.ToUpper()).Equals(mobName))
+                    int count = (6 * i);
+                    string name = Plugin.RemoveWhitespaces(items[count]);
+                    int minItemDropAmount = int.Parse(Plugin.RemoveWhitespaces(items[count + 1]));
+                    int maxItemDropAmount = int.Parse(Plugin.RemoveWhitespaces(items[count + 2]));
+                    int minScrapValue = int.Parse(Plugin.RemoveWhitespaces(items[count + 3]));
+                    int maxScrapValue = int.Parse(Plugin.RemoveWhitespaces(items[count + 4]));
+                    int dropChance = int.Parse(Plugin.RemoveWhitespaces(items[count + 5]));
+                    int rand = UnityEngine.Random.Range(1, 1000);
+                    if (rand < dropChance)
                     {
-                        List<string> items = Plugin.GetMobItems(mobName);
-                        for (int i = 0; i < (items.Count / 6); i++)
+                        foreach (Item itemToGive in Plugin.items)
                         {
-                            int count = (6 * i);
-                            string name = Plugin.RemoveWhitespaces(items[count]);
-                            int minItemDropAmount = int.Parse(Plugin.RemoveWhitespaces(items[count + 1]));
-                            int maxItemDropAmount = int.Parse(Plugin.RemoveWhitespaces(items[count + 2]));
-                            int minScrapValue = int.Parse(Plugin.RemoveWhitespaces(items[count + 3]));
-                            int maxScrapValue = int.Parse(Plugin.RemoveWhitespaces(items[count + 4]));
-                            int dropChance = int.Parse(Plugin.RemoveWhitespaces(items[count + 5]));
-                            System.Random random = new System.Random();
-                            int rand = UnityEngine.Random.Range(1, 1000);
-                            if (rand < dropChance)
+                            if (Plugin.RemoveWhitespaces(itemToGive.itemName.ToUpper()).Equals(Plugin.RemoveWhitespaces(name.ToUpper())))
                             {
-                                foreach (Item itemToGive in Plugin.items)
+                                rand = 1;
+                                if (minItemDropAmount < maxItemDropAmount && minItemDropAmount > 0)
                                 {
-                                    if (Plugin.RemoveWhitespaces(itemToGive.itemName.ToUpper()).Equals(Plugin.RemoveWhitespaces(name.ToUpper())))
-                                    {
-                                        rand = 1;
-                                        if (minItemDropAmount < maxItemDropAmount && minItemDropAmount > 0)
-                                        {
-                                            rand = UnityEngine.Random.Range(minItemDropAmount, maxItemDropAmount);
-                                        }
-                                        for (int id = 0; id < rand; id++)
-                                        {
-                                            itemsToGive.Add(new ItemToDrop(itemToGive, UnityEngine.Random.Range(minScrapValue, maxScrapValue)));
-                                            Plugin.logger.LogInfo("Item Added!");
-                                        }
-                                    }
+                                    rand = UnityEngine.Random.Range(minItemDropAmount, maxItemDropAmount);
+                                }
+                                for (int id = 0; id < rand; id++)
+                                {
+                                    itemsToGive.Add(new ItemToDrop(itemToGive, UnityEngine.Random.Range(minScrapValue, maxScrapValue)));
+                                    Plugin.logger.LogInfo("Item Added!");
                                 }
                             }
                         }
                     }
                 }
+            }
+            else
+            {
+                Plugin.logger.LogInfo("No Config Items Found For Mob!");
             }
             return itemsToGive;
         }
