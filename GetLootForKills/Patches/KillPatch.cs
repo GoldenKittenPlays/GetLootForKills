@@ -1,5 +1,6 @@
 ﻿using GetLootForKills.Component;
 using HarmonyLib;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Netcode;
@@ -7,17 +8,15 @@ using UnityEngine;
 
 namespace GetLootForKills.Patches
 {
-    [HarmonyPatch(typeof(EnemyAI))]
     internal class KillPatch
     {
-        [HarmonyPatch("KillEnemyOnOwnerClient")]
-        [HarmonyPrefix]
-        static void patchKillEnemyOnOwnerClient(ref EnemyAI __instance)
+        public static void patchKillEnemyOnOwnerClient(ref EnemyAI __instance)
         {
             if (__instance.gameObject.GetComponent<DroppedItemEnemy>() == null)
             {
                 RoundManager instance = RoundManager.Instance;
                 Plugin.logger.LogInfo("Killed Mob Name: " + __instance.enemyType.enemyName.ToUpper());
+                Vector3 position = __instance.transform.position + Vector3.up * 0.6f;
                 List<ItemToDrop> items = GetItemsForMob(Plugin.RemoveWhitespaces(__instance.enemyType.enemyName.ToUpper()));
                 if (!items.Any())
                 {
@@ -26,21 +25,46 @@ namespace GetLootForKills.Patches
                 }
                 for(int i = 0; i < items.Count; i++)
                 {
-                    Vector3 position = __instance.transform.position + Vector3.up * 0.6f;
-                    position += new Vector3(UnityEngine.Random.Range(- 0.8f, 0.8f), 0f, UnityEngine.Random.Range(-0.8f, 0.8f));
-                    GameObject obj = UnityEngine.Object.Instantiate(items[i].scrapItem.spawnPrefab, position, Quaternion.identity, RoundManager.Instance.spawnedScrapContainer);
-                    GrabbableObject component = obj.GetComponent<GrabbableObject>();
-                    component.fallTime = 0f;
-                    int valueOfScrap = items[i].scrapValue;
-                    if (instance.scrapValueMultiplier > 1)
+                    if (items[i].scrapItem.spawnPrefab != null)
                     {
-                        valueOfScrap = (int)(valueOfScrap * instance.scrapValueMultiplier);
+                        position += new Vector3(UnityEngine.Random.Range(-0.8f, 0.8f), 0f, UnityEngine.Random.Range(-0.8f, 0.8f));
+                        GameObject obj = UnityEngine.Object.Instantiate(items[i].scrapItem.spawnPrefab, position, Quaternion.identity, RoundManager.Instance.spawnedScrapContainer);
+                        GrabbableObject component = obj.GetComponent<GrabbableObject>();
+                        component.transform.rotation = Quaternion.Euler(component.itemProperties.restingRotation);
+                        component.fallTime = 0f;
+                        int valueOfScrap = items[i].scrapValue;
+                        if (instance.scrapValueMultiplier > 1)
+                        {
+                            valueOfScrap = (int)(valueOfScrap * instance.scrapValueMultiplier);
+                        }
+                        component.SetScrapValue(valueOfScrap);
+                        obj.GetComponent<NetworkObject>().Spawn();
+                        DropItem(position, items[i].scrapItem.spawnPrefab, items[i].scrapValue, instance);
                     }
-                    component.SetScrapValue(valueOfScrap);
-                    obj.GetComponent<NetworkObject>().Spawn();
-                    __instance.gameObject.AddComponent<DroppedItemEnemy>();
+                    else
+                    {
+                        Plugin.logger.LogWarning("Item drop does not exist running default drop.");
+                        DropItem(position, instance.currentLevel.spawnableScrap[UnityEngine.Random.Range(0, instance.currentLevel.spawnableScrap.Count)].spawnableItem.spawnPrefab, UnityEngine.Random.Range(100, 250), instance);
+                    }
                 }
+                __instance.gameObject.AddComponent<DroppedItemEnemy>();
             }
+        }
+
+        static void DropItem(Vector3 position, GameObject itemPrefab, int scrapValue, RoundManager instance)
+        {
+            position += new Vector3(UnityEngine.Random.Range(-0.8f, 0.8f), 0f, UnityEngine.Random.Range(-0.8f, 0.8f));
+            GameObject obj = UnityEngine.Object.Instantiate(itemPrefab, position, Quaternion.identity, RoundManager.Instance.spawnedScrapContainer);
+            GrabbableObject component = obj.GetComponent<GrabbableObject>();
+            component.transform.rotation = Quaternion.Euler(component.itemProperties.restingRotation);
+            component.fallTime = 0f;
+            int valueOfScrap = scrapValue;
+            if (instance.scrapValueMultiplier > 1)
+            {
+                valueOfScrap = (int)(valueOfScrap * instance.scrapValueMultiplier);
+            }
+            component.SetScrapValue(valueOfScrap);
+            obj.GetComponent<NetworkObject>().Spawn();
         }
  
         static List<ItemToDrop> GetItemsForMob(string mobName)

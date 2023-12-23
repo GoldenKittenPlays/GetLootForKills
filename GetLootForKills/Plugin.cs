@@ -1,11 +1,14 @@
 ﻿using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
+using GameNetcodeStuff;
 using GetLootForKills.Patches;
 using HarmonyLib;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using UnityEngine;
 
 namespace GetLootForKills
 {
@@ -39,7 +42,9 @@ namespace GetLootForKills
             harmony.PatchAll(typeof(Plugin));
             harmony.PatchAll(typeof(StartOfRoundPatch));
             harmony.PatchAll(typeof(RoundManagerPatch));
-            harmony.PatchAll(typeof(KillPatch));
+            MethodInfo HoarderBugAI_KillEnemy_Method = AccessTools.Method(typeof(EnemyAI), nameof(EnemyAI.KillEnemyOnOwnerClient), null, null);
+            MethodInfo KillEnemy_Patch_Method = AccessTools.Method(typeof(KillPatch), nameof(KillPatch.patchKillEnemyOnOwnerClient), null, null);
+            harmony.Patch(HoarderBugAI_KillEnemy_Method, null, new HarmonyMethod(KillEnemy_Patch_Method), null, null, null);
         }
 
         public static string RemoveWhitespaces(string source)
