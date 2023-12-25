@@ -12,7 +12,7 @@ namespace GetLootForKills.Patches
     {
         public static void patchKillEnemyOnOwnerClient(ref EnemyAI __instance, bool overrideDestroy = false)
         {
-            if (__instance.gameObject.GetComponent<DroppedItemEnemy>() == null)
+            if (__instance.gameObject.GetComponent<DroppedItemEnemy>() == null && __instance.IsOwner)
             {
                 if (__instance is HoarderBugAI)
                 {
