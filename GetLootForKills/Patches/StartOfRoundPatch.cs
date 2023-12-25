@@ -1,5 +1,6 @@
 ﻿using BepInEx.Configuration;
 using HarmonyLib;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
@@ -15,10 +16,12 @@ namespace GetLootForKills.Patches
             //This happens at the end of waiting for entrance teleport spawn
             Plugin.enemies = Resources.FindObjectsOfTypeAll(typeof(EnemyType)).Cast<EnemyType>().Where(e => e != null).ToList();
             Plugin.items = Resources.FindObjectsOfTypeAll(typeof(Item)).Cast<Item>().Where(i => i != null).ToList();
+            List<string> itemsNames = Plugin.items.ConvertAll(i => i.itemName);
+            itemsNames.Sort();
             Plugin.possibleItems = Plugin.Instance.Config.Bind("General",
                                         "ItemNames",
                                         "Notice The List Please",
-                                        "" + string.Join("|", Plugin.items.ConvertAll(i => i.itemName)));
+                                        "" + string.Join("|", itemsNames));
             foreach (Item item in Plugin.items)
             {
                 Plugin.logger.LogInfo("ItemName: " + item.itemName);

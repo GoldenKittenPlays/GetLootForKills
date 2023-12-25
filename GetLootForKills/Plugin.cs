@@ -42,9 +42,9 @@ namespace GetLootForKills
             harmony.PatchAll(typeof(Plugin));
             harmony.PatchAll(typeof(StartOfRoundPatch));
             harmony.PatchAll(typeof(RoundManagerPatch));
-            MethodInfo HoarderBugAI_KillEnemy_Method = AccessTools.Method(typeof(EnemyAI), nameof(EnemyAI.KillEnemyOnOwnerClient), null, null);
+            MethodInfo AI_KillEnemy_Method = AccessTools.Method(typeof(EnemyAI), nameof(EnemyAI.KillEnemyOnOwnerClient), null, null);
             MethodInfo KillEnemy_Patch_Method = AccessTools.Method(typeof(KillPatch), nameof(KillPatch.patchKillEnemyOnOwnerClient), null, null);
-            harmony.Patch(HoarderBugAI_KillEnemy_Method, null, new HarmonyMethod(KillEnemy_Patch_Method), null, null, null);
+            harmony.Patch(AI_KillEnemy_Method, new HarmonyMethod(KillEnemy_Patch_Method), null, null, null, null);
         }
 
         public static string RemoveWhitespaces(string source)

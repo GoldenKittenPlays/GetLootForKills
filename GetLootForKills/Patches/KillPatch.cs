@@ -10,10 +10,19 @@ namespace GetLootForKills.Patches
 {
     internal class KillPatch
     {
-        public static void patchKillEnemyOnOwnerClient(ref EnemyAI __instance)
+        public static void patchKillEnemyOnOwnerClient(ref EnemyAI __instance, bool overrideDestroy = false)
         {
             if (__instance.gameObject.GetComponent<DroppedItemEnemy>() == null)
             {
+                if (__instance is HoarderBugAI)
+                {
+                    HoarderBugAI bug = ((HoarderBugAI)__instance);
+                    if (bug.heldItem != null)
+                    {
+                        GrabbableObject held = bug.heldItem.itemGrabbableObject;
+                        bug.DropItemServerRpc(held.GetComponent<NetworkObject>(), __instance.transform.position, false);
+                    }
+                }
                 RoundManager instance = RoundManager.Instance;
                 Plugin.logger.LogInfo("Killed Mob Name: " + __instance.enemyType.enemyName.ToUpper());
                 Vector3 position = __instance.transform.position + Vector3.up * 0.6f;
@@ -23,28 +32,16 @@ namespace GetLootForKills.Patches
                     int num = UnityEngine.Random.Range(0, instance.currentLevel.spawnableScrap.Count);
                     items.Add(new ItemToDrop(instance.currentLevel.spawnableScrap[num].spawnableItem, UnityEngine.Random.Range(30, 50)));
                 }
-                for(int i = 0; i < items.Count; i++)
+                for (int i = 0; i < items.Count; i++)
                 {
                     if (items[i].scrapItem.spawnPrefab != null)
                     {
-                        position += new Vector3(UnityEngine.Random.Range(-0.8f, 0.8f), 0f, UnityEngine.Random.Range(-0.8f, 0.8f));
-                        GameObject obj = UnityEngine.Object.Instantiate(items[i].scrapItem.spawnPrefab, position, Quaternion.identity, RoundManager.Instance.spawnedScrapContainer);
-                        GrabbableObject component = obj.GetComponent<GrabbableObject>();
-                        component.transform.rotation = Quaternion.Euler(component.itemProperties.restingRotation);
-                        component.fallTime = 0f;
-                        int valueOfScrap = items[i].scrapValue;
-                        if (instance.scrapValueMultiplier > 1)
-                        {
-                            valueOfScrap = (int)(valueOfScrap * instance.scrapValueMultiplier);
-                        }
-                        component.SetScrapValue(valueOfScrap);
-                        obj.GetComponent<NetworkObject>().Spawn();
                         DropItem(position, items[i].scrapItem.spawnPrefab, items[i].scrapValue, instance);
                     }
                     else
                     {
                         Plugin.logger.LogWarning("Item drop does not exist running default drop.");
-                        DropItem(position, instance.currentLevel.spawnableScrap[UnityEngine.Random.Range(0, instance.currentLevel.spawnableScrap.Count)].spawnableItem.spawnPrefab, UnityEngine.Random.Range(100, 250), instance);
+                        DropItem(position, instance.currentLevel.spawnableScrap[UnityEngine.Random.Range(0, instance.currentLevel.spawnableScrap.Count)].spawnableItem.spawnPrefab, UnityEngine.Random.Range(50, 150), instance);
                     }
                 }
                 __instance.gameObject.AddComponent<DroppedItemEnemy>();
@@ -53,8 +50,9 @@ namespace GetLootForKills.Patches
 
         static void DropItem(Vector3 position, GameObject itemPrefab, int scrapValue, RoundManager instance)
         {
+            Transform scrapContainer = instance.spawnedScrapContainer;
             position += new Vector3(UnityEngine.Random.Range(-0.8f, 0.8f), 0f, UnityEngine.Random.Range(-0.8f, 0.8f));
-            GameObject obj = UnityEngine.Object.Instantiate(itemPrefab, position, Quaternion.identity, RoundManager.Instance.spawnedScrapContainer);
+            GameObject obj = UnityEngine.Object.Instantiate(itemPrefab, position, Quaternion.identity, scrapContainer);
             GrabbableObject component = obj.GetComponent<GrabbableObject>();
             component.transform.rotation = Quaternion.Euler(component.itemProperties.restingRotation);
             component.fallTime = 0f;
@@ -63,8 +61,12 @@ namespace GetLootForKills.Patches
             {
                 valueOfScrap = (int)(valueOfScrap * instance.scrapValueMultiplier);
             }
+            component.itemProperties.isScrap = true;
             component.SetScrapValue(valueOfScrap);
-            obj.GetComponent<NetworkObject>().Spawn();
+            NetworkObject net = obj.GetComponent<NetworkObject>();
+            net.Spawn();
+            instance.SyncScrapValuesClientRpc(new List<NetworkObjectReference>() { net }.ToArray(), new List<int>() { valueOfScrap }.ToArray());
+            Plugin.logger.LogWarning("Item drop synced.");
         }
  
         static List<ItemToDrop> GetItemsForMob(string mobName)
