@@ -1,14 +1,13 @@
 ﻿using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
-using GameNetcodeStuff;
 using GetLootForKills.Patches;
 using HarmonyLib;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using UnityEngine;
+using System.Text;
 
 namespace GetLootForKills
 {
@@ -52,6 +51,24 @@ namespace GetLootForKills
             return string.Join("", source.Split(default(string[]), StringSplitOptions.RemoveEmptyEntries));
         }
 
+        public static string RemoveSpecialCharacters(string source)
+        {
+            StringBuilder sb = new StringBuilder();
+            foreach (char c in source)
+            {
+                if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))
+                {
+                    sb.Append(c);
+                }
+            }
+            return sb.ToString();
+        }
+
+        public static string RemoveInvalidCharacters(string source)
+        {
+            return RemoveWhitespaces(RemoveSpecialCharacters(source));
+        }
+
         public static List<string> GetMobItems(string mobName)
         {
             foreach (ConfigDefinition entry in Instance.Config.Keys)
@@ -61,7 +78,6 @@ namespace GetLootForKills
                     return Instance.Config[entry].BoxedValue.ToString().ToUpper().Split(',').ToList();
                 }
             }
-            logger.LogInfo("No mob found!");
             return new List<string>();
         }
     }

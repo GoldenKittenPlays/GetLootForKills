@@ -11,28 +11,24 @@ namespace GetLootForKills.Patches
     {
         [HarmonyPatch("Start")]
         [HarmonyPostfix]
-        private static void patchStart()
+        private static void PatchStart()
         {
             //This happens at the end of waiting for entrance teleport spawn
             Plugin.enemies = Resources.FindObjectsOfTypeAll(typeof(EnemyType)).Cast<EnemyType>().Where(e => e != null).ToList();
             Plugin.items = Resources.FindObjectsOfTypeAll(typeof(Item)).Cast<Item>().Where(i => i != null).ToList();
-            List<string> itemsNames = Plugin.items.ConvertAll(i => i.itemName);
+            List<string> itemsNames = Plugin.items.ConvertAll(i => Plugin.RemoveInvalidCharacters(i.itemName));
             itemsNames.Sort();
             Plugin.possibleItems = Plugin.Instance.Config.Bind("General",
                                         "ItemNames",
                                         "Notice The List Please",
                                         "" + string.Join("|", itemsNames));
-            foreach (Item item in Plugin.items)
-            {
-                Plugin.logger.LogInfo("ItemName: " + item.itemName);
-            }
             foreach (EnemyType enemy in Plugin.enemies)
             {
-                Plugin.logger.LogInfo("MobName: " + enemy.enemyName);
-                if (!Plugin.Instance.Config.ContainsKey(new ConfigDefinition("Mobs", enemy.enemyName)))
+                string mobName = Plugin.RemoveInvalidCharacters(enemy.enemyName);
+                if (!Plugin.Instance.Config.ContainsKey(new ConfigDefinition("Mobs", mobName)))
                 {
                     ConfigEntry<string> tempEntry = Plugin.Instance.Config.Bind("Mobs", // The section under which the option is shown
-                                             enemy.enemyName, // The key of the configuration option in the configuration file
+                                             mobName, // The key of the configuration option in the configuration file
                                              "Old phone, 1, 3, 50, 80, 1000, Flask, 1, 1, 200, 400, 100", // The default value
                                              "The First setting is the item name." +
                                              "The Second setting is the minimum item drop amount." +
@@ -41,7 +37,8 @@ namespace GetLootForKills.Patches
                                              "The Fifth setting is the maximum scrap value amount." +
                                              "The Last setting is the chance of it dropping from 1-1000." +
                                              "You can add more items like all config entries do," +
-                                             "up to however many you want(each has 2 item drops default).");
+                                             "up to however many you want(each has 2 item drops default)." +
+                                             "You can also put 'None' so that the mob drops nothing.");
                 }
             }
         }

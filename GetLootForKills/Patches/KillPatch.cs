@@ -1,6 +1,4 @@
 ﻿using GetLootForKills.Component;
-using HarmonyLib;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Netcode;
@@ -10,7 +8,7 @@ namespace GetLootForKills.Patches
 {
     internal class KillPatch
     {
-        public static void patchKillEnemyOnOwnerClient(ref EnemyAI __instance, bool overrideDestroy = false)
+        public static void PatchKillEnemyOnOwnerClient(ref EnemyAI __instance, bool overrideDestroy = false)
         {
             if (__instance.gameObject.GetComponent<DroppedItemEnemy>() == null && __instance.IsOwner)
             {
@@ -24,24 +22,23 @@ namespace GetLootForKills.Patches
                     }
                 }
                 RoundManager instance = RoundManager.Instance;
-                Plugin.logger.LogInfo("Killed Mob Name: " + __instance.enemyType.enemyName.ToUpper());
+                string mobName = Plugin.RemoveInvalidCharacters(__instance.enemyType.enemyName.ToUpper());
                 Vector3 position = __instance.transform.position + Vector3.up * 0.6f;
-                List<ItemToDrop> items = GetItemsForMob(Plugin.RemoveWhitespaces(__instance.enemyType.enemyName.ToUpper()));
-                if (!items.Any())
+                List<ItemToDrop> items = GetItemsForMob(mobName);
+                if (items.Any())
                 {
-                    int num = UnityEngine.Random.Range(0, instance.currentLevel.spawnableScrap.Count);
-                    items.Add(new ItemToDrop(instance.currentLevel.spawnableScrap[num].spawnableItem, UnityEngine.Random.Range(30, 50)));
-                }
-                for (int i = 0; i < items.Count; i++)
-                {
-                    if (items[i].scrapItem.spawnPrefab != null)
+                    //int num = UnityEngine.Random.Range(0, instance.currentLevel.spawnableScrap.Count);
+                    //items.Add(new ItemToDrop(instance.currentLevel.spawnableScrap[num].spawnableItem, UnityEngine.Random.Range(30, 50)));
+                    for (int i = 0; i < items.Count; i++)
                     {
-                        DropItem(position, items[i].scrapItem.spawnPrefab, items[i].scrapValue, instance);
-                    }
-                    else
-                    {
-                        Plugin.logger.LogWarning("Item drop does not exist running default drop.");
-                        DropItem(position, instance.currentLevel.spawnableScrap[UnityEngine.Random.Range(0, instance.currentLevel.spawnableScrap.Count)].spawnableItem.spawnPrefab, UnityEngine.Random.Range(50, 150), instance);
+                        if (items[i].scrapItem.spawnPrefab != null)
+                        {
+                            DropItem(position, items[i].scrapItem.spawnPrefab, items[i].scrapValue, instance);
+                        }
+                        else
+                        {
+                            DropItem(position, instance.currentLevel.spawnableScrap[UnityEngine.Random.Range(0, instance.currentLevel.spawnableScrap.Count)].spawnableItem.spawnPrefab, UnityEngine.Random.Range(50, 150), instance);
+                        }
                     }
                 }
                 __instance.gameObject.AddComponent<DroppedItemEnemy>();
@@ -66,7 +63,6 @@ namespace GetLootForKills.Patches
             NetworkObject net = obj.GetComponent<NetworkObject>();
             net.Spawn();
             instance.SyncScrapValuesClientRpc(new List<NetworkObjectReference>() { net }.ToArray(), new List<int>() { valueOfScrap }.ToArray());
-            Plugin.logger.LogWarning("Item drop synced.");
         }
  
         static List<ItemToDrop> GetItemsForMob(string mobName)
@@ -78,37 +74,46 @@ namespace GetLootForKills.Patches
                 for (int i = 0; i < (items.Count / 6); i++)
                 {
                     int count = (6 * i);
-                    string name = Plugin.RemoveWhitespaces(items[count]);
-                    int minItemDropAmount = int.Parse(Plugin.RemoveWhitespaces(items[count + 1]));
-                    int maxItemDropAmount = int.Parse(Plugin.RemoveWhitespaces(items[count + 2]));
-                    int minScrapValue = int.Parse(Plugin.RemoveWhitespaces(items[count + 3]));
-                    int maxScrapValue = int.Parse(Plugin.RemoveWhitespaces(items[count + 4]));
-                    int dropChance = int.Parse(Plugin.RemoveWhitespaces(items[count + 5]));
-                    int rand = UnityEngine.Random.Range(1, 1000);
-                    if (rand < dropChance)
+                    string name = Plugin.RemoveInvalidCharacters(items[count]);
+                    if (name == "NONE")
                     {
-                        foreach (Item itemToGive in Plugin.items)
+                        Item empty = (Item)ScriptableObject.CreateInstance(typeof(Item));
+                        empty.name = name;
+                        empty.spawnPrefab = new GameObject(name);
+                        empty.minValue = 0;
+                        empty.maxValue = 0;
+                        empty.creditsWorth = 0;
+                        itemsToGive.Add(new ItemToDrop(empty, 1));
+                        break;
+                    }
+                    else
+                    {
+                        int minItemDropAmount = int.Parse(Plugin.RemoveInvalidCharacters(items[count + 1]));
+                        int maxItemDropAmount = int.Parse(Plugin.RemoveInvalidCharacters(items[count + 2]));
+                        int minScrapValue = int.Parse(Plugin.RemoveInvalidCharacters(items[count + 3]));
+                        int maxScrapValue = int.Parse(Plugin.RemoveInvalidCharacters(items[count + 4]));
+                        int dropChance = int.Parse(Plugin.RemoveInvalidCharacters(items[count + 5]));
+                        int rand = UnityEngine.Random.Range(1, 1000);
+                        if (rand < dropChance)
                         {
-                            if (Plugin.RemoveWhitespaces(itemToGive.itemName.ToUpper()).Equals(Plugin.RemoveWhitespaces(name.ToUpper())))
+                            foreach (Item itemToGive in Plugin.items)
                             {
-                                rand = 1;
-                                if (minItemDropAmount < maxItemDropAmount && minItemDropAmount > 0)
+                                if (Plugin.RemoveInvalidCharacters(itemToGive.itemName.ToUpper()).Equals(Plugin.RemoveInvalidCharacters(name.ToUpper())))
                                 {
-                                    rand = UnityEngine.Random.Range(minItemDropAmount, maxItemDropAmount);
-                                }
-                                for (int id = 0; id < rand; id++)
-                                {
-                                    itemsToGive.Add(new ItemToDrop(itemToGive, UnityEngine.Random.Range(minScrapValue, maxScrapValue)));
-                                    Plugin.logger.LogInfo("Item Added!");
+                                    rand = 1;
+                                    if (minItemDropAmount < maxItemDropAmount && minItemDropAmount > 0)
+                                    {
+                                        rand = UnityEngine.Random.Range(minItemDropAmount, maxItemDropAmount);
+                                    }
+                                    for (int id = 0; id < rand; id++)
+                                    {
+                                        itemsToGive.Add(new ItemToDrop(itemToGive, UnityEngine.Random.Range(minScrapValue, maxScrapValue)));
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-            else
-            {
-                Plugin.logger.LogInfo("No Config Items Found For Mob!");
             }
             return itemsToGive;
         }
