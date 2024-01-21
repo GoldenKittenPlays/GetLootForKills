@@ -1,4 +1,5 @@
-﻿using GetLootForKills.Component;
+﻿using BepInEx;
+using GetLootForKills.Component;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Netcode;
@@ -27,17 +28,11 @@ namespace GetLootForKills.Patches
                 List<ItemToDrop> items = GetItemsForMob(mobName);
                 if (items.Any())
                 {
-                    //int num = UnityEngine.Random.Range(0, instance.currentLevel.spawnableScrap.Count);
-                    //items.Add(new ItemToDrop(instance.currentLevel.spawnableScrap[num].spawnableItem, UnityEngine.Random.Range(30, 50)));
                     for (int i = 0; i < items.Count; i++)
                     {
                         if (items[i].scrapItem.spawnPrefab != null)
                         {
                             DropItem(position, items[i].scrapItem.spawnPrefab, items[i].scrapValue, instance);
-                        }
-                        else
-                        {
-                            DropItem(position, instance.currentLevel.spawnableScrap[UnityEngine.Random.Range(0, instance.currentLevel.spawnableScrap.Count)].spawnableItem.spawnPrefab, UnityEngine.Random.Range(50, 150), instance);
                         }
                     }
                 }
@@ -62,9 +57,8 @@ namespace GetLootForKills.Patches
             component.SetScrapValue(valueOfScrap);
             NetworkObject net = obj.GetComponent<NetworkObject>();
             net.Spawn();
-            instance.SyncScrapValuesClientRpc(new List<NetworkObjectReference>() { net }.ToArray(), new List<int>() { valueOfScrap }.ToArray());
+            instance.totalScrapValueInLevel += valueOfScrap;
         }
- 
         static List<ItemToDrop> GetItemsForMob(string mobName)
         {
             List<ItemToDrop> itemsToGive = new List<ItemToDrop>();
@@ -74,46 +68,119 @@ namespace GetLootForKills.Patches
                 for (int i = 0; i < (items.Count / 6); i++)
                 {
                     int count = (6 * i);
-                    string name = Plugin.RemoveInvalidCharacters(items[count]);
-                    if (name == "NONE")
+                    if (!items[count].IsNullOrWhiteSpace())
                     {
-                        Item empty = (Item)ScriptableObject.CreateInstance(typeof(Item));
-                        empty.name = name;
-                        empty.spawnPrefab = new GameObject(name);
-                        empty.minValue = 0;
-                        empty.maxValue = 0;
-                        empty.creditsWorth = 0;
-                        itemsToGive.Add(new ItemToDrop(empty, 1));
-                        break;
-                    }
-                    else
-                    {
-                        int minItemDropAmount = int.Parse(Plugin.RemoveInvalidCharacters(items[count + 1]));
-                        int maxItemDropAmount = int.Parse(Plugin.RemoveInvalidCharacters(items[count + 2]));
-                        int minScrapValue = int.Parse(Plugin.RemoveInvalidCharacters(items[count + 3]));
-                        int maxScrapValue = int.Parse(Plugin.RemoveInvalidCharacters(items[count + 4]));
-                        int dropChance = int.Parse(Plugin.RemoveInvalidCharacters(items[count + 5]));
-                        int rand = UnityEngine.Random.Range(1, 1000);
-                        if (rand < dropChance)
+                        string name = Plugin.RemoveInvalidCharacters(items[count]);
+                        if (name.ToUpper().Equals("NONE"))
                         {
-                            foreach (Item itemToGive in Plugin.items)
+                            Item empty = (Item)ScriptableObject.CreateInstance(typeof(Item));
+                            empty.name = "NONE";
+                            empty.spawnPrefab = new GameObject("NONE");
+                            empty.minValue = 0;
+                            empty.maxValue = 0;
+                            empty.creditsWorth = 0;
+                            itemsToGive.Add(new ItemToDrop(empty, 1));
+                            Plugin.logger.LogInfo("Worthless Item Dropped!");
+                        }
+                        else
+                        {
+                            if (int.TryParse(Plugin.RemoveInvalidCharacters(items[count + 1]), out int minItemDropAmount))
                             {
-                                if (Plugin.RemoveInvalidCharacters(itemToGive.itemName.ToUpper()).Equals(Plugin.RemoveInvalidCharacters(name.ToUpper())))
+                                if (int.TryParse(Plugin.RemoveInvalidCharacters(items[count + 2]), out int maxItemDropAmount))
                                 {
-                                    rand = 1;
-                                    if (minItemDropAmount < maxItemDropAmount && minItemDropAmount > 0)
+                                    if (int.TryParse(Plugin.RemoveInvalidCharacters(items[count + 3]), out int minScrapValue))
                                     {
-                                        rand = UnityEngine.Random.Range(minItemDropAmount, maxItemDropAmount);
+                                        if (int.TryParse(Plugin.RemoveInvalidCharacters(items[count + 4]), out int maxScrapValue))
+                                        {
+                                            if (int.TryParse(Plugin.RemoveInvalidCharacters(items[count + 5]), out int dropChance))
+                                            {
+                                                int rand = UnityEngine.Random.Range(1, 1000);
+                                                if (rand < dropChance)
+                                                {
+                                                    foreach (Item itemToGive in Plugin.items)
+                                                    {
+                                                        if (name.ToUpper().Equals("RANDOM"))
+                                                        {
+                                                            int num = UnityEngine.Random.Range(0, RoundManager.Instance.currentLevel.spawnableScrap.Count);
+                                                            rand = 0;
+                                                            if (minItemDropAmount < maxItemDropAmount)
+                                                            {
+                                                                rand = UnityEngine.Random.Range(minItemDropAmount, maxItemDropAmount);
+                                                            }
+                                                            else
+                                                            {
+                                                                rand = minItemDropAmount;
+                                                            }
+                                                            if (rand > 0)
+                                                            {
+                                                                for (int id = 0; id < rand; id++)
+                                                                {
+                                                                    itemsToGive.Add(new ItemToDrop(RoundManager.Instance.currentLevel.spawnableScrap[num].spawnableItem, UnityEngine.Random.Range(minScrapValue, maxScrapValue)));
+                                                                    Plugin.logger.LogInfo("Spawning random item!");
+                                                                }
+                                                                break;
+                                                            }
+                                                        }
+                                                        else if (Plugin.RemoveInvalidCharacters(itemToGive.itemName.ToUpper()).Equals(Plugin.RemoveInvalidCharacters(name.ToUpper())))
+                                                        {
+                                                            rand = 0;
+                                                            if (minItemDropAmount < maxItemDropAmount)
+                                                            {
+                                                                rand = UnityEngine.Random.Range(minItemDropAmount, maxItemDropAmount);
+                                                            }
+                                                            else
+                                                            {
+                                                                rand = minItemDropAmount;
+                                                            }
+                                                            if (rand > 0)
+                                                            {
+                                                                for (int id = 0; id < rand; id++)
+                                                                {
+                                                                    itemsToGive.Add(new ItemToDrop(itemToGive, UnityEngine.Random.Range(minScrapValue, maxScrapValue)));
+                                                                }
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            else
+                                            {
+                                                Plugin.logger.LogInfo("Drop Chance is not a number!");
+                                            }
+                                        }
+                                        else
+                                        {
+                                            Plugin.logger.LogInfo("Max Scrap Value is not a number!");
+                                        }
                                     }
-                                    for (int id = 0; id < rand; id++)
+                                    else
                                     {
-                                        itemsToGive.Add(new ItemToDrop(itemToGive, UnityEngine.Random.Range(minScrapValue, maxScrapValue)));
+                                        Plugin.logger.LogInfo("Min Scrap Value is not a number!");
                                     }
                                 }
+                                else
+                                {
+                                    Plugin.logger.LogInfo("Max Item Drop is not a number!");
+                                }
+                            }
+                            else
+                            {
+                                Plugin.logger.LogInfo("Min Item Drop is not a number!");
                             }
                         }
                     }
+                    else
+                    {
+                        Plugin.logger.LogInfo("The Item Name does not match any existing item names!");
+                    }
                 }
+            }
+            else
+            {
+                Plugin.logger.LogInfo("Item name either does not exist or is empty. Backup Item Loaded!");
+                int num = UnityEngine.Random.Range(0, RoundManager.Instance.currentLevel.spawnableScrap.Count);
+                itemsToGive.Add(new ItemToDrop(RoundManager.Instance.currentLevel.spawnableScrap[num].spawnableItem, UnityEngine.Random.Range(30, 100)));
             }
             return itemsToGive;
         }
