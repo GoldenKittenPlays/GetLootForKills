@@ -105,7 +105,7 @@ namespace GetLootForKills.Patches
                                                             rand = 0;
                                                             if (minItemDropAmount < maxItemDropAmount)
                                                             {
-                                                                rand = UnityEngine.Random.Range(minItemDropAmount, maxItemDropAmount);
+                                                                rand = UnityEngine.Random.Range(minItemDropAmount, maxItemDropAmount + 1);
                                                             }
                                                             else
                                                             {
