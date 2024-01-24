@@ -1,5 +1,7 @@
 ﻿using BepInEx;
+using GameNetcodeStuff;
 using GetLootForKills.Component;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Netcode;
@@ -22,7 +24,6 @@ namespace GetLootForKills.Patches
                         bug.DropItemServerRpc(held.GetComponent<NetworkObject>(), __instance.transform.position, false);
                     }
                 }
-                RoundManager instance = RoundManager.Instance;
                 string mobName = Plugin.RemoveInvalidCharacters(__instance.enemyType.enemyName.ToUpper());
                 Vector3 position = __instance.transform.position + Vector3.up * 0.6f;
                 List<ItemToDrop> items = GetItemsForMob(mobName);
@@ -32,16 +33,35 @@ namespace GetLootForKills.Patches
                     {
                         if (items[i].scrapItem.spawnPrefab != null)
                         {
-                            DropItem(position, items[i].scrapItem.spawnPrefab, items[i].scrapValue, instance);
+                            DropItem(__instance, position, items[i].scrapItem.spawnPrefab, items[i].scrapValue);
                         }
                     }
                 }
                 __instance.gameObject.AddComponent<DroppedItemEnemy>();
             }
         }
-
-        static void DropItem(Vector3 position, GameObject itemPrefab, int scrapValue, RoundManager instance)
+        static void DropItem(EnemyAI enemy, Vector3 position, GameObject itemPrefab, int scrapValue)
         {
+            PlayerControllerB player = GameNetworkManager.Instance.localPlayerController;
+            if (player.IsHost)
+            {
+                DropItemHost(player, position, itemPrefab, scrapValue);
+            }
+            else if (player.IsClient && !player.IsHost)
+            {
+                DropItemServerRpc(player, position, itemPrefab, scrapValue);
+            }
+        }
+
+        [ServerRpc]
+        static void DropItemServerRpc(PlayerControllerB player, Vector3 position, GameObject itemPrefab, int scrapValue)
+        {
+            DropItemHost(player, position, itemPrefab, scrapValue);
+        }
+
+        static void DropItemHost(PlayerControllerB player, Vector3 position, GameObject itemPrefab, int scrapValue)
+        {
+            RoundManager instance = RoundManager.Instance;
             Transform scrapContainer = instance.spawnedScrapContainer;
             position += new Vector3(UnityEngine.Random.Range(-0.8f, 0.8f), 0f, UnityEngine.Random.Range(-0.8f, 0.8f));
             GameObject obj = UnityEngine.Object.Instantiate(itemPrefab, position, Quaternion.identity, scrapContainer);
@@ -55,10 +75,67 @@ namespace GetLootForKills.Patches
             }
             component.itemProperties.isScrap = true;
             component.SetScrapValue(valueOfScrap);
+            component.itemProperties.creditsWorth = valueOfScrap;
+            instance.totalScrapValueInLevel += valueOfScrap;
             NetworkObject net = obj.GetComponent<NetworkObject>();
             net.Spawn();
-            instance.totalScrapValueInLevel += valueOfScrap;
+            SyncScrapValuesClientRpc(player, new NetworkObjectReference[] { net }, new int[] { valueOfScrap });
         }
+
+        [ClientRpc]
+        static void SyncScrapValuesClientRpc(PlayerControllerB player, NetworkObjectReference[] spawnedScrap, int[] allScrapValue)
+        {
+            Plugin.logger.LogInfo($"clientRPC scrap values length: {allScrapValue.Length}");
+            int num = 0;
+            for (int i = 0; i < spawnedScrap.Length; i++)
+            {
+                if (spawnedScrap[i].TryGet(out var networkObject))
+                {
+                    GrabbableObject component = networkObject.GetComponent<GrabbableObject>();
+                    if (component != null)
+                    {
+                        if (i >= allScrapValue.Length)
+                        {
+                            Plugin.logger.LogError($"spawnedScrap amount exceeded allScrapValue!: {spawnedScrap.Length}");
+                            break;
+                        }
+
+                        component.SetScrapValue(allScrapValue[i]);
+                        num += allScrapValue[i];
+                        if (component.itemProperties.meshVariants.Length != 0)
+                        {
+                            component.gameObject.GetComponent<MeshFilter>().mesh = component.itemProperties.meshVariants[UnityEngine.Random.Range(0, component.itemProperties.meshVariants.Length)];
+                        }
+
+                        try
+                        {
+                            if (component.itemProperties.materialVariants.Length != 0)
+                            {
+                                component.gameObject.GetComponent<MeshRenderer>().sharedMaterial = component.itemProperties.materialVariants[UnityEngine.Random.Range(0, component.itemProperties.materialVariants.Length)];
+                            }
+                        }
+                        catch (Exception arg)
+                        {
+                            Plugin.logger.LogInfo($"Item name: {component.gameObject.name}; {arg}");
+                        }
+                    }
+                    else
+                    {
+                        Plugin.logger.LogError("Scrap networkobject object did not contain grabbable object!: " + networkObject.gameObject.name);
+                    }
+                }
+                else
+                {
+                    Plugin.logger.LogError($"Failed to get networkobject reference for scrap. id: {spawnedScrap[i].NetworkObjectId}");
+                }
+            }
+
+            RoundManager.Instance.totalScrapValueInLevel += num;
+            Plugin.logger.LogInfo($"Round Manager Total Scrap Value: {RoundManager.Instance.totalScrapValueInLevel}");
+            //scrapCollectedInLevel = 0;
+            //valueOfFoundScrapItems = 0;
+        }
+
         static List<ItemToDrop> GetItemsForMob(string mobName)
         {
             List<ItemToDrop> itemsToGive = new List<ItemToDrop>();
@@ -118,8 +195,8 @@ namespace GetLootForKills.Patches
                                                                     itemsToGive.Add(new ItemToDrop(RoundManager.Instance.currentLevel.spawnableScrap[num].spawnableItem, UnityEngine.Random.Range(minScrapValue, maxScrapValue)));
                                                                     Plugin.logger.LogInfo("Spawning random item!");
                                                                 }
-                                                                break;
                                                             }
+                                                            break;
                                                         }
                                                         else if (Plugin.RemoveInvalidCharacters(itemToGive.itemName.ToUpper()).Equals(Plugin.RemoveInvalidCharacters(name.ToUpper())))
                                                         {
@@ -138,8 +215,8 @@ namespace GetLootForKills.Patches
                                                                 {
                                                                     itemsToGive.Add(new ItemToDrop(itemToGive, UnityEngine.Random.Range(minScrapValue, maxScrapValue)));
                                                                 }
-                                                                break;
                                                             }
+                                                            break;
                                                         }
                                                     }
                                                 }
