@@ -14,8 +14,8 @@ namespace GetLootForKills.Patches
         private static void PatchStart()
         {
             //This happens at the end of waiting for entrance teleport spawn
-            Plugin.enemies = Resources.FindObjectsOfTypeAll(typeof(EnemyType)).Cast<EnemyType>().Where(e => e != null).ToList();
-            Plugin.items = Resources.FindObjectsOfTypeAll(typeof(Item)).Cast<Item>().Where(i => i != null).ToList();
+            Plugin.enemies = Resources.FindObjectsOfTypeAll(typeof(EnemyType)).Cast<EnemyType>().Where(e => e != null).ToList().Distinct().ToList();
+            Plugin.items = Resources.FindObjectsOfTypeAll(typeof(Item)).Cast<Item>().Where(i => i != null).ToList().Distinct().ToList();
             List<string> itemsNames = Plugin.items.ConvertAll(i => Plugin.RemoveInvalidCharacters(i.itemName));
             itemsNames.Sort();
             Plugin.possibleItems = Plugin.Instance.Config.Bind("General",
